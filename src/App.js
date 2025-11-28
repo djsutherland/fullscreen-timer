@@ -1,12 +1,10 @@
 import React, { Component } from 'react';
 import clsx from 'clsx';
-// import logo from './logo.svg';
 import './App.css';
 
-const pad = (n) => (n < 10)? `0${n}` : n;
+const pad = (n) => (n < 10) ? `0${n}` : n;
 
 class App extends Component {
-
   constructor(props) {
     super(props);
     this.state = {
@@ -17,8 +15,9 @@ class App extends Component {
       adjusting: false,
       editing: null, // minute, second, null
       showCursor: false,
-    }
+    };
     this.timer = null;
+    this.wakeLock = null;
   }
 
   componentDidMount() {
@@ -28,9 +27,31 @@ class App extends Component {
     window.addEventListener('keydown', this.handleKeyDown);
   }
 
-  componentWillMount() {
+  componentWillUnmount() {
     clearInterval(this.timer);
     window.removeEventListener('keydown', this.handleKeyDown);
+    this.releaseWakeLock();
+  }
+
+  async requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        this.wakeLock = await navigator.wakeLock.request('screen');
+        this.wakeLock.addEventListener('release', () => {
+          console.log('Wake Lock was released');
+        });
+        console.log('Wake Lock is active');
+      }
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  }
+
+  async releaseWakeLock() {
+    if (this.wakeLock) {
+      await this.wakeLock.release();
+      this.wakeLock = null;
+    }
   }
 
   tick() {
@@ -42,14 +63,13 @@ class App extends Component {
     this.setState((prevState) => {
       const t = prevState.t + (mode === 'countdown' ? -1 : 1) * 0.5;
       if (t <= 0) {
+        this.releaseWakeLock();
         return {
           t: 0,
           paused: true,
-        }
+        };
       } else {
-        return {
-          t,
-        }
+        return { t };
       }
     });
   }
@@ -60,42 +80,51 @@ class App extends Component {
       document.documentElement.requestFullscreen();
     } else {
       if (document.exitFullscreen) {
-        document.exitFullscreen(); 
+        document.exitFullscreen();
       }
     }
     this.setState({ fullscreen: !fullscreen });
-  }
+  };
 
   resetTimer = () => {
+    this.releaseWakeLock();
     this.setState({
       t: 0,
       paused: true
     });
-  }
+  };
 
   switchMode = (mode) => {
     this.setState({
       mode: mode || (this.state.mode === 'stopwatch' ? 'countdown' : 'stopwatch'),
-    })
-  }
+    });
+  };
 
   pauseTimer = () => {
+    const paused = !this.state.paused;
     this.setState({
-      paused: !this.state.paused,
+      paused,
       editing: false,
-    })
-  }
+    }, () => {
+      if (!paused) {
+        this.requestWakeLock();
+      } else {
+        this.releaseWakeLock();
+      }
+    });
+  };
 
   toggleEditing = () => {
     const { editing } = this.state;
     this.setState({
       editing: editing ? null : 'second',
     });
-  }
+  };
 
   handleCursorMove(direction) {
     const state = { ...this.state };
     state.paused = true;
+    this.releaseWakeLock();
     switch (direction) {
       case 'up':
       case 'down':
@@ -137,7 +166,7 @@ class App extends Component {
       case 'ArrowDown':
       case 'ArrowLeft':
       case 'ArrowRight':
-        this.handleCursorMove(event.key.toLowerCase().replace('arrow', ''))
+        this.handleCursorMove(event.key.toLowerCase().replace('arrow', ''));
         break;
       case 'Enter':
         this.toggleEditing();
@@ -148,7 +177,7 @@ class App extends Component {
       default:
         break;
     }
-  }
+  };
 
   render() {
     const { t, paused, editing, mode, showCursor, fullscreen } = this.state;
@@ -168,7 +197,7 @@ class App extends Component {
           <li>
             <button onClick={this.toggleFullScreen}>F</button>
             -
-            <span className="tip">{fullscreen ? 'exit': 'enter'} fullscreen</span>
+            <span className="tip">{fullscreen ? 'exit' : 'enter'} fullscreen</span>
           </li>
           <li>
             <button onClick={() => this.handleCursorMove('left')}>←</button>
