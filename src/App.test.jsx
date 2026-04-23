@@ -5,6 +5,10 @@ import App from './App';
 
 afterEach(() => {
   window.history.replaceState(null, '', window.location.pathname);
+  window.sessionStorage.clear();
+  if (typeof window.localStorage?.clear === 'function') {
+    window.localStorage.clear();
+  }
 });
 
 it('renders without crashing', () => {
@@ -31,6 +35,85 @@ it('restores timer state from the query string on load', () => {
 
   expect(container.querySelector('.clock')?.textContent).toBe('56:31');
   expect(getByText('countdown ✓')).not.toBeNull();
+  expect(JSON.parse(window.sessionStorage.getItem('fullscreen-timer-state') || '{}')).toMatchObject({
+    t: 3391,
+    mode: 'countdown',
+  });
+
+  unmount();
+});
+
+it('restores timer state from session storage when the query is missing', () => {
+  window.sessionStorage.setItem('fullscreen-timer-state', JSON.stringify({
+    t: 3391,
+    mode: 'countdown',
+  }));
+
+  const { container, getByText, unmount } = render(<App />);
+
+  expect(container.querySelector('.clock')?.textContent).toBe('56:31');
+  expect(getByText('countdown ✓')).not.toBeNull();
+
+  unmount();
+});
+
+it('restores timer state from local storage when session storage is missing', () => {
+  const originalLocalStorage = window.localStorage;
+  const localStorageMock = {
+    store: new Map(),
+    clear() {
+      this.store.clear();
+    },
+    getItem(key) {
+      return this.store.has(key) ? this.store.get(key) : null;
+    },
+    setItem(key, value) {
+      this.store.set(key, value);
+    },
+  };
+
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: localStorageMock,
+  });
+
+  try {
+    window.localStorage.setItem('fullscreen-timer-state', JSON.stringify({
+      t: 3391,
+      mode: 'countdown',
+    }));
+
+    const { container, getByText, unmount } = render(<App />);
+
+    expect(container.querySelector('.clock')?.textContent).toBe('56:31');
+    expect(getByText('countdown ✓')).not.toBeNull();
+
+    unmount();
+  } finally {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: originalLocalStorage,
+    });
+  }
+});
+
+it('restores persisted timer state on pageshow and starts from that value', () => {
+  const { container, getByText, unmount } = render(<App />);
+
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:08:09`);
+  window.sessionStorage.setItem('fullscreen-timer-state', JSON.stringify({
+    t: 489,
+    mode: 'countdown',
+  }));
+
+  fireEvent(window, new Event('pageshow'));
+
+  expect(container.querySelector('.clock')?.textContent).toBe('08:09');
+  expect(getByText('countdown ✓')).not.toBeNull();
+
+  fireEvent.click(getByText('Space'));
+
+  expect(container.querySelector('.clock')?.textContent).toBe('08:09');
 
   unmount();
 });

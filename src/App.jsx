@@ -62,6 +62,39 @@ const parseTimeInput = (value) => {
 
   return (hour * 3600) + (minute * 60) + second;
 };
+const TIMER_STATE_STORAGE_KEY = 'fullscreen-timer-state';
+const getAvailableStorages = () => [window.sessionStorage, window.localStorage].filter(
+  (storage) => storage
+    && typeof storage.getItem === 'function'
+    && typeof storage.setItem === 'function',
+);
+const getTimerStateFromWebStorage = (storage) => {
+  try {
+    const rawValue = storage.getItem(TIMER_STATE_STORAGE_KEY);
+    if (!rawValue) return null;
+
+    const parsedValue = JSON.parse(rawValue);
+    if (!['countdown', 'stopwatch'].includes(parsedValue.mode)) return null;
+    if (typeof parsedValue.t !== 'number' || Number.isNaN(parsedValue.t) || parsedValue.t < 0) return null;
+
+    return {
+      t: parsedValue.t,
+      mode: parsedValue.mode,
+    };
+  } catch {
+    return null;
+  }
+};
+const getTimerStateFromStorage = () => {
+  for (const storage of getAvailableStorages()) {
+    const persistedState = getTimerStateFromWebStorage(storage);
+    if (persistedState) {
+      return persistedState;
+    }
+  }
+
+  return null;
+};
 const getTimerStateFromQuery = () => {
   const params = new URLSearchParams(window.location.search);
 
@@ -78,6 +111,17 @@ const getTimerStateFromQuery = () => {
   }
 
   return {
+    t: null,
+    mode: null,
+  };
+};
+const getInitialTimerState = () => {
+  const queryState = getTimerStateFromQuery();
+  if (queryState.mode) {
+    return queryState;
+  }
+
+  return getTimerStateFromStorage() || {
     t: 0,
     mode: 'stopwatch',
   };
@@ -87,7 +131,7 @@ const CURSOR_HIDE_DELAY_MS = 1500;
 class App extends Component {
   constructor(props) {
     super(props);
-    const initialTimerState = getTimerStateFromQuery();
+    const initialTimerState = getInitialTimerState();
     this.state = {
       t: initialTimerState.t,
       paused: true,
@@ -104,14 +148,19 @@ class App extends Component {
     this.timer = null;
     this.wakeLock = null;
     this.cursorHideTimer = null;
+    this.restoreRetryTimers = [];
     this.timeInputRef = React.createRef();
   }
 
   componentDidMount() {
-    this.syncTimerStateToQuery();
+    this.restoreTimerStateFromPersistence();
+    this.scheduleRestoreRetries();
     this.timer = setInterval(() => {
       this.tick();
     }, 500);
+    window.addEventListener('pagehide', this.syncTimerStateToStorage);
+    window.addEventListener('pageshow', this.restoreTimerStateFromPersistence);
+    window.addEventListener('popstate', this.restoreTimerStateFromPersistence);
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('mousemove', this.handlePointerActivity);
     window.addEventListener('pointermove', this.handlePointerActivity);
@@ -121,6 +170,10 @@ class App extends Component {
   componentWillUnmount() {
     clearInterval(this.timer);
     clearTimeout(this.cursorHideTimer);
+    this.restoreRetryTimers.forEach((timerId) => clearTimeout(timerId));
+    window.removeEventListener('pagehide', this.syncTimerStateToStorage);
+    window.removeEventListener('pageshow', this.restoreTimerStateFromPersistence);
+    window.removeEventListener('popstate', this.restoreTimerStateFromPersistence);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('mousemove', this.handlePointerActivity);
     window.removeEventListener('pointermove', this.handlePointerActivity);
@@ -135,11 +188,26 @@ class App extends Component {
       this.timeInputRef.current.select();
     }
 
+    const persistedState = getInitialTimerState();
+    if (
+      this.state.paused &&
+      this.state.t === 0 &&
+      persistedState.t > 0 &&
+      this.state.mode === persistedState.mode
+    ) {
+      this.setState({
+        t: persistedState.t,
+        timeInputValue: formatClockTime(persistedState.t).text,
+      });
+      return;
+    }
+
     if (
       prevState.mode !== this.state.mode ||
       parseInt(prevState.t, 10) !== parseInt(this.state.t, 10)
     ) {
       this.syncTimerStateToQuery();
+      this.syncTimerStateToStorage();
     }
 
     document.documentElement.classList.toggle(
@@ -159,7 +227,52 @@ class App extends Component {
     const nextSearch = params.toString();
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
 
-    window.history.replaceState(null, '', nextUrl);
+    window.history.replaceState(window.history.state, document.title, nextUrl);
+  };
+
+  syncTimerStateToStorage = () => {
+    const serializedState = JSON.stringify({
+      t: this.state.t,
+      mode: this.state.mode,
+    });
+
+    for (const storage of getAvailableStorages()) {
+      try {
+        storage.setItem(TIMER_STATE_STORAGE_KEY, serializedState);
+      } catch {
+        // Ignore storage failures and rely on other persistence layers.
+      }
+    }
+  };
+
+  scheduleRestoreRetries = () => {
+    this.restoreRetryTimers.forEach((timerId) => clearTimeout(timerId));
+    this.restoreRetryTimers = [50, 250].map((delayMs) => setTimeout(() => {
+      this.restoreTimerStateFromPersistence();
+    }, delayMs));
+  };
+
+  restoreTimerStateFromPersistence = () => {
+    const persistedState = getInitialTimerState();
+
+    this.setState((prevState) => {
+      if (
+        prevState.mode === persistedState.mode &&
+        prevState.t === persistedState.t
+      ) {
+        return null;
+      }
+
+      return {
+        t: persistedState.t,
+        paused: true,
+        mode: persistedState.mode,
+        timeInputValue: formatClockTime(persistedState.t).text,
+      };
+    }, () => {
+      this.syncTimerStateToQuery();
+      this.syncTimerStateToStorage();
+    });
   };
 
   async requestWakeLock() {
@@ -267,7 +380,15 @@ class App extends Component {
 
   pauseTimer = () => {
     const paused = !this.state.paused;
+    const persistedState = getInitialTimerState();
+    const nextTime = (
+      this.state.paused &&
+      this.state.t === 0 &&
+      persistedState.t > 0 &&
+      this.state.mode === persistedState.mode
+    ) ? persistedState.t : this.state.t;
     this.setState({
+      t: nextTime,
       paused,
       editing: false,
     });
@@ -438,8 +559,16 @@ class App extends Component {
       timeInputValue,
       timeInputError,
     } = this.state;
-    const displaySeconds = getDisplayTotalSeconds(t, paused, mode);
-    const { hour, minute, second } = formatClockTime(displaySeconds);
+    const persistedState = getInitialTimerState();
+    const effectiveState = (
+      paused &&
+      t === 0 &&
+      persistedState.t > 0 &&
+      mode === persistedState.mode
+    ) ? { ...this.state, t: persistedState.t } : this.state;
+    const displaySeconds = getDisplayTotalSeconds(effectiveState.t, paused, effectiveState.mode);
+    const displayTime = formatClockTime(displaySeconds);
+    const { hour, minute, second, text } = displayTime;
     const showHours = hour > 0;
     return (
       <div className="App">
