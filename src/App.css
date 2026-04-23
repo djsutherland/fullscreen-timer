@@ -70,12 +70,25 @@ body {
   font-family: "SFMono-Regular", "Roboto Mono", Consolas, "Liberation Mono", Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
+.clock.negative {
+  color: #d86464;
+}
 .clock.paused {
   color: #b8b8b8;
   animation: pausedPulse 1.2s ease-in-out infinite;
 }
+.clock.paused.negative {
+  color: #d86464;
+}
 .clock.paused .seconds-group {
   color: #5f5f5f;
+}
+.clock.negative .seconds-group {
+  color: #a64b4b;
+}
+.clock .sign {
+  line-height: 1;
+  margin-right: 0.08em;
 }
 .clock .separator {
   line-height: 1;

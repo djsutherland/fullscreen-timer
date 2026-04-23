@@ -4,42 +4,63 @@ import './App.css';
 
 const pad = (n) => (n < 10) ? `0${n}` : n;
 const formatHour = (n) => (n < 10) ? `${n}` : pad(n);
+const getExactWholeSeconds = (t, mode) => {
+  if (mode === 'countdown') {
+    return t >= 0 ? Math.ceil(t) : Math.floor(t);
+  }
+
+  return t >= 0 ? Math.floor(t) : Math.ceil(t);
+};
 const formatClockTime = (totalSeconds) => {
-  const hour = parseInt(totalSeconds / 3600, 10);
-  const minute = parseInt((totalSeconds % 3600) / 60, 10);
-  const second = totalSeconds % 60;
+  const isNegative = totalSeconds < 0;
+  const absoluteSeconds = Math.abs(totalSeconds);
+  const hour = Math.floor(absoluteSeconds / 3600);
+  const minute = Math.floor((absoluteSeconds % 3600) / 60);
+  const second = absoluteSeconds % 60;
+  const sign = isNegative ? '-' : '';
   return {
     hour,
     minute,
     second,
-    text: `${formatHour(hour)}:${pad(minute)}:${pad(second)}`,
+    isNegative,
+    text: `${sign}${formatHour(hour)}:${pad(minute)}:${pad(second)}`,
   };
 };
 const formatQueryTime = (totalSeconds) => formatClockTime(totalSeconds).text.replaceAll(':', '.');
 const getRunningDisplayStep = (totalSeconds) => {
-  if (totalSeconds >= 3600) return 15;
-  if (totalSeconds >= 1200) return 5;
+  const absoluteSeconds = Math.abs(totalSeconds);
+  if (absoluteSeconds >= 3600) return 15;
+  if (absoluteSeconds >= 1200) return 5;
   return 1;
 };
 const getDisplayTotalSeconds = (t, paused, mode) => {
-  const wholeSeconds = mode === 'countdown' ? Math.ceil(t) : Math.floor(t);
+  const wholeSeconds = getExactWholeSeconds(t, mode);
 
   if (paused) {
-    return Math.max(0, wholeSeconds);
+    return wholeSeconds;
   }
 
   const step = getRunningDisplayStep(t);
 
   if (step === 1) {
-    return Math.max(0, wholeSeconds);
+    return wholeSeconds;
   }
 
-  return mode === 'countdown'
-    ? Math.ceil(wholeSeconds / step) * step
-    : Math.floor(wholeSeconds / step) * step;
+  if (mode === 'countdown') {
+    return wholeSeconds >= 0
+      ? Math.ceil(wholeSeconds / step) * step
+      : Math.floor(wholeSeconds / step) * step;
+  }
+
+  return wholeSeconds >= 0
+    ? Math.floor(wholeSeconds / step) * step
+    : Math.ceil(wholeSeconds / step) * step;
 };
 const parseTimeInput = (value) => {
-  const segments = value.trim().split(/[:.]/);
+  const trimmedValue = value.trim();
+  const sign = trimmedValue.startsWith('-') ? -1 : 1;
+  const normalizedValue = sign === -1 ? trimmedValue.slice(1) : trimmedValue;
+  const segments = normalizedValue.split(/[:.]/);
   if (!segments[0] || segments.length > 3 || segments.some((segment) => !/^\d+$/.test(segment))) {
     return null;
   }
@@ -61,7 +82,7 @@ const parseTimeInput = (value) => {
     return null;
   }
 
-  return (hour * 3600) + (minute * 60) + second;
+  return sign * ((hour * 3600) + (minute * 60) + second);
 };
 const TIMER_STATE_STORAGE_KEY = 'fullscreen-timer-state';
 const getAvailableStorages = () => [window.sessionStorage, window.localStorage].filter(
@@ -76,7 +97,7 @@ const getTimerStateFromWebStorage = (storage) => {
 
     const parsedValue = JSON.parse(rawValue);
     if (!['countdown', 'stopwatch'].includes(parsedValue.mode)) return null;
-    if (typeof parsedValue.t !== 'number' || Number.isNaN(parsedValue.t) || parsedValue.t < 0) return null;
+    if (typeof parsedValue.t !== 'number' || Number.isNaN(parsedValue.t)) return null;
 
     return {
       t: parsedValue.t,
@@ -193,7 +214,7 @@ class App extends Component {
     if (
       this.state.paused &&
       this.state.t === 0 &&
-      persistedState.t > 0 &&
+      persistedState.t !== 0 &&
       this.state.mode === persistedState.mode
     ) {
       this.setState({
@@ -219,7 +240,7 @@ class App extends Component {
 
   syncTimerStateToQuery = () => {
     const params = new URLSearchParams(window.location.search);
-    const queryValue = formatQueryTime(parseInt(this.state.t, 10));
+    const queryValue = formatQueryTime(getExactWholeSeconds(this.state.t, this.state.mode));
 
     params.delete('countdown');
     params.delete('stopwatch');
@@ -322,14 +343,7 @@ class App extends Component {
     if (paused) return;
     this.setState((prevState) => {
       const t = prevState.t + (mode === 'countdown' ? -1 : 1) * 0.5;
-      if (t <= 0) {
-        return {
-          t: 0,
-          paused: true,
-        };
-      } else {
-        return { t };
-      }
+      return { t };
     });
   }
 
@@ -385,7 +399,7 @@ class App extends Component {
     const nextTime = (
       this.state.paused &&
       this.state.t === 0 &&
-      persistedState.t > 0 &&
+      persistedState.t !== 0 &&
       this.state.mode === persistedState.mode
     ) ? persistedState.t : this.state.t;
     this.setState({
@@ -564,19 +578,20 @@ class App extends Component {
     const effectiveState = (
       paused &&
       t === 0 &&
-      persistedState.t > 0 &&
+      persistedState.t !== 0 &&
       mode === persistedState.mode
     ) ? { ...this.state, t: persistedState.t } : this.state;
     const displaySeconds = getDisplayTotalSeconds(effectiveState.t, paused, effectiveState.mode);
     const displayTime = formatClockTime(displaySeconds);
-    const { hour, minute, second, text } = displayTime;
+    const { hour, minute, second, isNegative } = displayTime;
     const showHours = hour > 0;
     return (
       <div className="App">
         <div
-          className={clsx('clock', { paused, 'show-cursor': showCursor })}
+          className={clsx('clock', { negative: isNegative, paused, 'show-cursor': showCursor })}
           onDoubleClick={() => this.toggleFullScreen()}
         >
+          {isNegative && <span className="sign">-</span>}
           {showHours && (
             <>
               <span className={clsx('time hour', { editing: editing === 'hour' })}>{formatHour(hour)}</span>

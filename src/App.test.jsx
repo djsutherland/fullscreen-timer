@@ -218,6 +218,28 @@ it('shows the exact countdown second again when paused', async () => {
   }
 });
 
+it('continues countdown past zero and shows negative time in red', async () => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.00.01`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  try {
+    fireEvent.click(getByText('Space'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(container.querySelector('.clock')?.textContent).toBe('-00:01');
+    expect(container.querySelector('.clock')?.classList.contains('negative')).toBe(true);
+    expect(new URLSearchParams(window.location.search).get('countdown')).toBe('-0.00.01');
+  } finally {
+    unmount();
+    vi.useRealTimers();
+  }
+});
+
 it('does not type the shortcut key into the time prompt', () => {
   const { getByLabelText, unmount } = render(<App />);
 
