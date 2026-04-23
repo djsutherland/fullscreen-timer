@@ -14,6 +14,17 @@ it('renders time as hours, minutes, and seconds', () => {
 
   expect(container.querySelector('.clock')?.textContent).toBe('0:00:00');
   expect(container.querySelector('.seconds-group')).not.toBeNull();
+  expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(true);
+
+  unmount();
+});
+
+it('removes the paused styling when the timer starts', () => {
+  const { container, getByText, unmount } = render(<App />);
+
+  fireEvent.click(getByText('Space'));
+
+  expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(false);
 
   unmount();
 });

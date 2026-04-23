@@ -378,7 +378,7 @@ class App extends Component {
     return (
       <div className="App">
         <div
-          className={clsx('clock', { 'show-cursor': showCursor })}
+          className={clsx('clock', { paused, 'show-cursor': showCursor })}
           onDoubleClick={() => this.toggleFullScreen()}
         >
           <span className={clsx('time hour', { editing: editing === 'hour' })}>{formatHour(hour)}</span>
