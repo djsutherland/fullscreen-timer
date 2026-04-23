@@ -40,11 +40,6 @@ body {
   background: #000;
 }
 
-@font-face {
-  font-family: "DS-Digital";
-  src: url("/ds-digit.ttf");
-}
-
 .clock {
   position: fixed;
   left: 50%;
@@ -52,7 +47,8 @@ body {
   transform: translate(-50%, -50%);
   font-size: 30vw;
   color: white;
-  font-family: Geneva, Tahoma, sans-serif;
+  font-family: "SFMono-Regular", "Roboto Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
 }
 .clock.show-cursor .time.editing {
   background: #666;
