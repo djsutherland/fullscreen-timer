@@ -15,6 +15,28 @@ const formatClockTime = (totalSeconds) => {
     text: `${formatHour(hour)}:${pad(minute)}:${pad(second)}`,
   };
 };
+const getRunningDisplayStep = (totalSeconds) => {
+  if (totalSeconds >= 3600) return 15;
+  if (totalSeconds >= 1200) return 5;
+  return 1;
+};
+const getDisplayTotalSeconds = (t, paused, mode) => {
+  const wholeSeconds = mode === 'countdown' ? Math.ceil(t) : Math.floor(t);
+
+  if (paused) {
+    return Math.max(0, wholeSeconds);
+  }
+
+  const step = getRunningDisplayStep(t);
+
+  if (step === 1) {
+    return Math.max(0, wholeSeconds);
+  }
+
+  return mode === 'countdown'
+    ? Math.ceil(wholeSeconds / step) * step
+    : Math.floor(wholeSeconds / step) * step;
+};
 const parseTimeInput = (value) => {
   const segments = value.trim().split(':');
   if (!segments[0] || segments.length > 3 || segments.some((segment) => !/^\d+$/.test(segment))) {
@@ -416,8 +438,8 @@ class App extends Component {
       timeInputValue,
       timeInputError,
     } = this.state;
-    const totalSeconds = parseInt(t, 10);
-    const { hour, minute, second } = formatClockTime(totalSeconds);
+    const displaySeconds = getDisplayTotalSeconds(t, paused, mode);
+    const { hour, minute, second } = formatClockTime(displaySeconds);
     return (
       <div className="App">
         <div

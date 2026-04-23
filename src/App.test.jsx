@@ -78,6 +78,52 @@ it('lets the user type a time directly', () => {
   unmount();
 });
 
+it('quantizes stopwatch seconds while running at one hour or more', () => {
+  window.history.replaceState(null, '', `${window.location.pathname}?stopwatch=1:02:16`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  fireEvent.click(getByText('Space'));
+
+  expect(container.querySelector('.clock')?.textContent).toBe('1:02:15');
+
+  unmount();
+});
+
+it('quantizes countdown seconds while running between twenty minutes and one hour', () => {
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  fireEvent.click(getByText('Space'));
+
+  expect(container.querySelector('.clock')?.textContent).toBe('0:56:35');
+
+  unmount();
+});
+
+it('shows the exact countdown second again when paused', async () => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  try {
+    fireEvent.click(getByText('Space'));
+    expect(container.querySelector('.clock')?.textContent).toBe('0:56:35');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    fireEvent.click(getByText('Space'));
+
+    expect(container.querySelector('.clock')?.textContent).toBe('0:56:31');
+  } finally {
+    unmount();
+    vi.useRealTimers();
+  }
+});
+
 it('does not type the shortcut key into the time prompt', () => {
   const { getByLabelText, unmount } = render(<App />);
 
