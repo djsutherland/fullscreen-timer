@@ -44,6 +44,7 @@ it('lets the user type a time directly', () => {
   fireEvent.click(getByText('Set'));
 
   expect(container.querySelector('.clock')?.textContent).toBe('1:23:45');
+  expect(getByText('countdown ✓')).not.toBeNull();
 
   unmount();
 });

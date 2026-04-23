@@ -253,6 +253,7 @@ class App extends Component {
     this.setState({
       t: nextTime,
       paused: true,
+      mode: 'countdown',
       showTimeInput: false,
       timeInputValue: formatClockTime(nextTime).text,
       timeInputError: '',
