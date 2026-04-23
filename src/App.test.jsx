@@ -1,7 +1,11 @@
 import React from 'react';
 import { act, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import App from './App';
+
+afterEach(() => {
+  window.history.replaceState(null, '', window.location.pathname);
+});
 
 it('renders without crashing', () => {
   const { container, unmount } = render(<App />);
@@ -15,6 +19,18 @@ it('renders time as hours, minutes, and seconds', () => {
   expect(container.querySelector('.clock')?.textContent).toBe('0:00:00');
   expect(container.querySelector('.seconds-group')).not.toBeNull();
   expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(true);
+  expect(new URLSearchParams(window.location.search).get('stopwatch')).toBe('0:00:00');
+
+  unmount();
+});
+
+it('restores timer state from the query string on load', () => {
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  expect(container.querySelector('.clock')?.textContent).toBe('0:56:31');
+  expect(getByText('countdown ✓')).not.toBeNull();
 
   unmount();
 });
@@ -56,6 +72,8 @@ it('lets the user type a time directly', () => {
 
   expect(container.querySelector('.clock')?.textContent).toBe('1:23:45');
   expect(getByText('countdown ✓')).not.toBeNull();
+  expect(new URLSearchParams(window.location.search).get('countdown')).toBe('1:23:45');
+  expect(new URLSearchParams(window.location.search).get('stopwatch')).toBeNull();
 
   unmount();
 });

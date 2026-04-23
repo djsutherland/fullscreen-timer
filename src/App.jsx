@@ -40,22 +40,43 @@ const parseTimeInput = (value) => {
 
   return (hour * 3600) + (minute * 60) + second;
 };
+const getTimerStateFromQuery = () => {
+  const params = new URLSearchParams(window.location.search);
+
+  for (const mode of ['countdown', 'stopwatch']) {
+    if (!params.has(mode)) continue;
+
+    const parsedTime = parseTimeInput(params.get(mode) || '');
+    if (parsedTime === null) continue;
+
+    return {
+      t: parsedTime,
+      mode,
+    };
+  }
+
+  return {
+    t: 0,
+    mode: 'stopwatch',
+  };
+};
 const CURSOR_HIDE_DELAY_MS = 1500;
 
 class App extends Component {
   constructor(props) {
     super(props);
+    const initialTimerState = getTimerStateFromQuery();
     this.state = {
-      t: 0,
+      t: initialTimerState.t,
       paused: true,
-      mode: 'stopwatch',
+      mode: initialTimerState.mode,
       fullscreen: false,
       adjusting: false,
       editing: null, // hour, minute, second, null
       showCursor: false,
       cursorVisible: true,
       showTimeInput: false,
-      timeInputValue: '0:00:00',
+      timeInputValue: formatClockTime(initialTimerState.t).text,
       timeInputError: '',
     };
     this.timer = null;
@@ -65,6 +86,7 @@ class App extends Component {
   }
 
   componentDidMount() {
+    this.syncTimerStateToQuery();
     this.timer = setInterval(() => {
       this.tick();
     }, 500);
@@ -91,11 +113,32 @@ class App extends Component {
       this.timeInputRef.current.select();
     }
 
+    if (
+      prevState.mode !== this.state.mode ||
+      parseInt(prevState.t, 10) !== parseInt(this.state.t, 10)
+    ) {
+      this.syncTimerStateToQuery();
+    }
+
     document.documentElement.classList.toggle(
       'hide-cursor',
       this.state.fullscreen && !this.state.cursorVisible,
     );
   }
+
+  syncTimerStateToQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = formatClockTime(parseInt(this.state.t, 10)).text;
+
+    params.delete('countdown');
+    params.delete('stopwatch');
+    params.set(this.state.mode, queryValue);
+
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+
+    window.history.replaceState(null, '', nextUrl);
+  };
 
   async requestWakeLock() {
     try {
