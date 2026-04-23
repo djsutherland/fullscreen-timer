@@ -218,6 +218,30 @@ it('shows the exact countdown second again when paused', async () => {
   }
 });
 
+it('live-updates the countdown query param at the exact displayed second boundary', async () => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.00.03`);
+
+  const { getByText, unmount } = render(<App />);
+
+  try {
+    fireEvent.click(getByText('Space'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(new URLSearchParams(window.location.search).get('countdown')).toBe('0.00.03');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(new URLSearchParams(window.location.search).get('countdown')).toBe('0.00.02');
+  } finally {
+    unmount();
+    vi.useRealTimers();
+  }
+});
+
 it('continues countdown past zero and shows negative time in red', async () => {
   vi.useFakeTimers();
   window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.00.01`);

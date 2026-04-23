@@ -27,6 +27,7 @@ const formatClockTime = (totalSeconds) => {
   };
 };
 const formatQueryTime = (totalSeconds) => formatClockTime(totalSeconds).text.replaceAll(':', '.');
+const getQueryTimeValue = (t, mode) => formatQueryTime(getExactWholeSeconds(t, mode));
 const getRunningDisplayStep = (totalSeconds) => {
   const absoluteSeconds = Math.abs(totalSeconds);
   if (absoluteSeconds >= 3600) return 15;
@@ -226,7 +227,7 @@ class App extends Component {
 
     if (
       prevState.mode !== this.state.mode ||
-      parseInt(prevState.t, 10) !== parseInt(this.state.t, 10)
+      getQueryTimeValue(prevState.t, prevState.mode) !== getQueryTimeValue(this.state.t, this.state.mode)
     ) {
       this.syncTimerStateToQuery();
       this.syncTimerStateToStorage();
@@ -240,7 +241,7 @@ class App extends Component {
 
   syncTimerStateToQuery = () => {
     const params = new URLSearchParams(window.location.search);
-    const queryValue = formatQueryTime(getExactWholeSeconds(this.state.t, this.state.mode));
+    const queryValue = getQueryTimeValue(this.state.t, this.state.mode);
 
     params.delete('countdown');
     params.delete('stopwatch');
