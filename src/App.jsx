@@ -150,6 +150,7 @@ const getInitialTimerState = () => {
   };
 };
 const CURSOR_HIDE_DELAY_MS = 1500;
+const shouldAutoHideFullscreenUi = ({ fullscreen, paused }) => fullscreen && !paused;
 
 class App extends Component {
   constructor(props) {
@@ -233,9 +234,24 @@ class App extends Component {
       this.syncTimerStateToStorage();
     }
 
+    const wasAutoHidingFullscreenUi = shouldAutoHideFullscreenUi(prevState);
+    const isAutoHidingFullscreenUi = shouldAutoHideFullscreenUi(this.state);
+    if (wasAutoHidingFullscreenUi !== isAutoHidingFullscreenUi) {
+      if (isAutoHidingFullscreenUi) {
+        this.setState({ cursorVisible: true });
+        this.scheduleCursorHide();
+      } else {
+        this.clearCursorHideTimer();
+        if (!this.state.cursorVisible) {
+          this.setState({ cursorVisible: true });
+          return;
+        }
+      }
+    }
+
     document.documentElement.classList.toggle(
       'hide-cursor',
-      this.state.fullscreen && !this.state.cursorVisible,
+      isAutoHidingFullscreenUi && !this.state.cursorVisible,
     );
   }
 
@@ -336,6 +352,17 @@ class App extends Component {
     }, CURSOR_HIDE_DELAY_MS);
   };
 
+  revealFullscreenUi = () => {
+    if (!document.fullscreenElement) return;
+
+    this.setState({ cursorVisible: true });
+    if (shouldAutoHideFullscreenUi(this.state)) {
+      this.scheduleCursorHide();
+    } else {
+      this.clearCursorHideTimer();
+    }
+  };
+
   tick() {
     const { mode, paused, showCursor, editing } = this.state;
     if (editing) {
@@ -354,7 +381,6 @@ class App extends Component {
 
     if (fullscreen) {
       this.requestWakeLock();
-      this.scheduleCursorHide();
     } else {
       this.clearCursorHideTimer();
       this.releaseWakeLock();
@@ -362,10 +388,7 @@ class App extends Component {
   };
 
   handlePointerActivity = () => {
-    if (!document.fullscreenElement) return;
-
-    this.setState({ cursorVisible: true });
-    this.scheduleCursorHide();
+    this.revealFullscreenUi();
   };
 
   toggleFullScreen = () => {
@@ -503,6 +526,8 @@ class App extends Component {
   }
 
   handleKeyDown = (event) => {
+    this.revealFullscreenUi();
+
     const targetTag = event.target.tagName;
     if (targetTag === 'INPUT') {
       if (event.key === 'Escape') {
@@ -571,6 +596,7 @@ class App extends Component {
       mode,
       showCursor,
       fullscreen,
+      cursorVisible,
       showTimeInput,
       timeInputValue,
       timeInputError,
@@ -586,8 +612,11 @@ class App extends Component {
     const displayTime = formatClockTime(displaySeconds);
     const { hour, minute, second, isNegative } = displayTime;
     const showHours = hour > 0;
+    const hideFullscreenUi = shouldAutoHideFullscreenUi(this.state) && !cursorVisible;
+    const showTips = !hideFullscreenUi;
     return (
-      <div className="App">
+      <div className={clsx('App', { 'hide-cursor': hideFullscreenUi })}>
+        {hideFullscreenUi && <div className="cursor-hide-overlay" aria-hidden="true" />}
         <div
           className={clsx('clock', { negative: isNegative, paused, 'show-cursor': showCursor })}
           onDoubleClick={() => this.toggleFullScreen()}
@@ -630,7 +659,7 @@ class App extends Component {
             {timeInputError && <span className="time-input-error">{timeInputError}</span>}
           </form>
         )}
-        <ul className="tips">
+        <ul className={clsx('tips', { hidden: !showTips })}>
           <li>
             <button onClick={this.toggleFullScreen}>F</button>
             -

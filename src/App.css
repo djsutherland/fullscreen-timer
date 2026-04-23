@@ -2,9 +2,19 @@
   text-align: center;
 }
 
+.cursor-hide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  cursor: none !important;
+}
+
 html.hide-cursor,
-html.hide-cursor * {
-  cursor: none;
+html.hide-cursor body,
+html.hide-cursor *,
+.App.hide-cursor,
+.App.hide-cursor * {
+  cursor: none !important;
 }
 
 .App-logo {
@@ -160,6 +170,11 @@ body {
   transform: translateX(-50%);
   color: #666;
   line-height: 2;
+  transition: opacity 160ms ease;
+}
+.tips.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 .tips li {
   text-align: left;

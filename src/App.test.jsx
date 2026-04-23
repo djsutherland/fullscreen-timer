@@ -346,7 +346,7 @@ it('keeps a wake lock active while fullscreen is on', async () => {
   });
 });
 
-it('hides the cursor after inactivity in fullscreen mode', async () => {
+it('only hides the cursor and tips while a fullscreen timer is running', async () => {
   vi.useFakeTimers();
 
   const originalWakeLock = navigator.wakeLock;
@@ -384,23 +384,56 @@ it('hides the cursor after inactivity in fullscreen mode', async () => {
   });
 
   const { getByText, unmount } = render(<App />);
+  const tips = document.querySelector('.tips');
 
   try {
     fireEvent.click(getByText('F'));
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
+
+    fireEvent.click(getByText('Space'));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
+    expect(tips?.classList.contains('hidden')).toBe(true);
 
     fireEvent.pointerMove(window);
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
+    expect(tips?.classList.contains('hidden')).toBe(true);
+
+    fireEvent.keyDown(window, { key: 's' });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
+    expect(tips?.classList.contains('hidden')).toBe(true);
+
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+    expect(tips?.classList.contains('hidden')).toBe(false);
   } finally {
     unmount();
 
