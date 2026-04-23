@@ -1,9 +1,10 @@
 import React from 'react';
-import { act, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, createEvent, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import App from './App';
 
 afterEach(() => {
+  cleanup();
   window.history.replaceState(null, '', window.location.pathname);
   window.sessionStorage.clear();
   if (typeof window.localStorage?.clear === 'function') {
@@ -158,18 +159,75 @@ it('lets arrow-key editing adjust hours', () => {
 });
 
 it('lets the user type a time directly', () => {
-  const { container, getByLabelText, getByText, unmount } = render(<App />);
+  const { container, getByLabelText, unmount } = render(<App />);
+  const desktopTips = container.querySelector('.desktop-tips');
 
-  fireEvent.click(getByText('T'));
+  fireEvent.click(within(desktopTips).getByText('T'));
   fireEvent.change(getByLabelText('Time input'), { target: { value: '1:23:45' } });
-  fireEvent.click(getByText('Set'));
+  fireEvent.click(container.querySelector('.time-input-panel button[type="submit"]'));
 
   expect(container.querySelector('.clock')?.textContent).toBe('1:23:45');
-  expect(getByText('countdown ✓')).not.toBeNull();
+  expect(container.textContent).toContain('countdown ✓');
   expect(new URLSearchParams(window.location.search).get('countdown')).toBe('1.23.45');
   expect(new URLSearchParams(window.location.search).get('stopwatch')).toBeNull();
 
   unmount();
+});
+
+it('renders a mobile action bar with touch controls', () => {
+  const { container, unmount } = render(<App />);
+  const mobileControls = container.querySelector('.mobile-controls');
+  const mobile = within(mobileControls);
+
+  expect(mobileControls).not.toBeNull();
+  expect(mobile.getByLabelText('Start timer')).not.toBeNull();
+  expect(mobile.getByLabelText('Set time')).not.toBeNull();
+  expect(mobile.getByLabelText('Switch to countdown')).not.toBeNull();
+  expect(mobile.getByLabelText('Reset timer')).not.toBeNull();
+  expect(mobile.getByLabelText('Enter fullscreen')).not.toBeNull();
+
+  unmount();
+});
+
+it('lets mobile action bar buttons control the timer', () => {
+  const originalRequestFullscreen = document.documentElement.requestFullscreen;
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: vi.fn(() => Promise.resolve()),
+  });
+
+  const { container, getByLabelText, unmount } = render(<App />);
+  let mobile = within(container.querySelector('.mobile-controls'));
+
+  try {
+    fireEvent.click(mobile.getByLabelText('Start timer'));
+    expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(false);
+
+    fireEvent.click(mobile.getByLabelText('Pause timer'));
+    expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(true);
+
+    fireEvent.click(mobile.getByLabelText('Switch to countdown'));
+    expect(container.textContent).toContain('countdown ✓');
+
+    fireEvent.click(mobile.getByLabelText('Set time'));
+    fireEvent.change(getByLabelText('Time input'), { target: { value: '45' } });
+    fireEvent.click(container.querySelector('.time-input-panel button[type="submit"]'));
+    expect(container.querySelector('.clock')?.textContent).toBe('00:45');
+
+    mobile = within(container.querySelector('.mobile-controls'));
+    fireEvent.click(mobile.getByLabelText('Reset timer'));
+    expect(container.querySelector('.clock')?.textContent).toBe('00:00');
+
+    mobile = within(container.querySelector('.mobile-controls'));
+    fireEvent.click(mobile.getByLabelText('Enter fullscreen'));
+    expect(document.documentElement.requestFullscreen).toHaveBeenCalled();
+  } finally {
+    unmount();
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: originalRequestFullscreen,
+    });
+  }
 });
 
 it('quantizes stopwatch seconds while running at one hour or more', () => {
@@ -276,6 +334,24 @@ it('does not type the shortcut key into the time prompt', () => {
   unmount();
 });
 
+it('does not treat command-r as the reset shortcut', () => {
+  const { container, unmount } = render(<App />);
+  const desktopTips = within(container.querySelector('.desktop-tips'));
+
+  fireEvent.click(desktopTips.getByText('T'));
+  fireEvent.change(container.querySelector('.time-input'), { target: { value: '45' } });
+  fireEvent.click(container.querySelector('.time-input-panel button[type="submit"]'));
+  expect(container.querySelector('.clock')?.textContent).toBe('00:45');
+
+  const event = createEvent.keyDown(window, { key: 'r', metaKey: true });
+  fireEvent(window, event);
+
+  expect(event.defaultPrevented).toBe(false);
+  expect(container.querySelector('.clock')?.textContent).toBe('00:45');
+
+  unmount();
+});
+
 it('keeps a wake lock active while fullscreen is on', async () => {
   const release = vi.fn().mockResolvedValue(undefined);
   const request = vi.fn().mockResolvedValue({
@@ -318,12 +394,13 @@ it('keeps a wake lock active while fullscreen is on', async () => {
     value: null,
   });
 
-  const { getByText, unmount } = render(<App />);
+  const { container, unmount } = render(<App />);
+  const desktopTips = within(container.querySelector('.desktop-tips'));
 
-  fireEvent.click(getByText('F'));
+  fireEvent.click(desktopTips.getByText('F'));
   await waitFor(() => expect(request).toHaveBeenCalledWith('screen'));
 
-  fireEvent.click(getByText('F'));
+  fireEvent.click(desktopTips.getByText('F'));
   await waitFor(() => expect(release).toHaveBeenCalled());
 
   unmount();
@@ -346,7 +423,7 @@ it('keeps a wake lock active while fullscreen is on', async () => {
   });
 });
 
-it('only hides the cursor and tips while a fullscreen timer is running', async () => {
+it('only hides the cursor and controls while a fullscreen timer is running', async () => {
   vi.useFakeTimers();
 
   const originalWakeLock = navigator.wakeLock;
@@ -383,57 +460,68 @@ it('only hides the cursor and tips while a fullscreen timer is running', async (
     value: null,
   });
 
-  const { getByText, unmount } = render(<App />);
-  const tips = document.querySelector('.tips');
+  const { container, unmount } = render(<App />);
+  const desktopTips = within(container.querySelector('.desktop-tips'));
+  const tips = container.querySelector('.tips');
+  const mobileControls = container.querySelector('.mobile-controls');
 
   try {
-    fireEvent.click(getByText('F'));
+    fireEvent.click(desktopTips.getByText('F'));
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
 
-    fireEvent.click(getByText('Space'));
+    fireEvent.click(desktopTips.getByText('Space'));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
     expect(tips?.classList.contains('hidden')).toBe(true);
+    expect(mobileControls?.classList.contains('hidden')).toBe(true);
 
     fireEvent.pointerMove(window);
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
     expect(tips?.classList.contains('hidden')).toBe(true);
+    expect(mobileControls?.classList.contains('hidden')).toBe(true);
 
     fireEvent.keyDown(window, { key: 's' });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
     expect(tips?.classList.contains('hidden')).toBe(true);
+    expect(mobileControls?.classList.contains('hidden')).toBe(true);
 
     fireEvent.keyDown(window, { key: ' ' });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
     expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
     expect(tips?.classList.contains('hidden')).toBe(false);
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
   } finally {
     unmount();
 
@@ -457,18 +545,98 @@ it('only hides the cursor and tips while a fullscreen timer is running', async (
   }
 });
 
+it('reveals fullscreen mobile controls again when the screen is tapped', async () => {
+  vi.useFakeTimers();
+
+  const originalWakeLock = navigator.wakeLock;
+  const originalRequestFullscreen = document.documentElement.requestFullscreen;
+  const originalExitFullscreen = document.exitFullscreen;
+  const originalFullscreenElement = document.fullscreenElement;
+
+  Object.defineProperty(navigator, 'wakeLock', {
+    configurable: true,
+    value: {
+      request: vi.fn().mockResolvedValue({
+        release: vi.fn().mockResolvedValue(undefined),
+        addEventListener: vi.fn(),
+      }),
+    },
+  });
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: vi.fn(() => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: document.documentElement,
+      });
+      fireEvent(document, new Event('fullscreenchange'));
+      return Promise.resolve();
+    }),
+  });
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    value: vi.fn(() => Promise.resolve()),
+  });
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    value: null,
+  });
+
+  const { container, unmount } = render(<App />);
+  const mobileControls = container.querySelector('.mobile-controls');
+  const mobile = within(mobileControls);
+
+  try {
+    fireEvent.click(mobile.getByLabelText('Enter fullscreen'));
+    fireEvent.click(mobile.getByLabelText('Start timer'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(mobileControls?.classList.contains('hidden')).toBe(true);
+
+    fireEvent.click(within(container).getByLabelText('Show controls'));
+    expect(mobileControls?.classList.contains('hidden')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(mobileControls?.classList.contains('hidden')).toBe(true);
+  } finally {
+    unmount();
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: originalWakeLock,
+    });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: originalRequestFullscreen,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: originalExitFullscreen,
+    });
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      value: originalFullscreenElement,
+    });
+    vi.useRealTimers();
+  }
+});
+
 it('shows a validation error for invalid typed times', () => {
-  const { container, getByLabelText, getByText, queryByText, unmount } = render(<App />);
+  const { container, getByLabelText, queryByText, unmount } = render(<App />);
+  const desktopTips = within(container.querySelector('.desktop-tips'));
 
-  fireEvent.click(getByText('T'));
+  fireEvent.click(desktopTips.getByText('T'));
   fireEvent.change(getByLabelText('Time input'), { target: { value: '1:75:00' } });
-  fireEvent.click(getByText('Set'));
+  fireEvent.click(container.querySelector('.time-input-panel button[type="submit"]'));
 
-  expect(getByText('Use h:mm:ss, m:ss, or ss')).not.toBeNull();
+  expect(container.textContent).toContain('Use h:mm:ss, m:ss, or ss');
   expect(container.querySelector('.clock')?.textContent).toBe('00:00');
 
   fireEvent.change(getByLabelText('Time input'), { target: { value: '45' } });
-  fireEvent.click(getByText('Set'));
+  fireEvent.click(container.querySelector('.time-input-panel button[type="submit"]'));
 
   expect(queryByText('Use h:mm:ss, m:ss, or ss')).toBeNull();
   expect(container.querySelector('.clock')?.textContent).toBe('00:45');

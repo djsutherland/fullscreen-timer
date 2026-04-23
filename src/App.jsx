@@ -173,6 +173,7 @@ class App extends Component {
     this.wakeLock = null;
     this.cursorHideTimer = null;
     this.restoreRetryTimers = [];
+    this.skipPersistedZeroRestore = false;
     this.timeInputRef = React.createRef();
   }
 
@@ -214,6 +215,7 @@ class App extends Component {
 
     const persistedState = getInitialTimerState();
     if (
+      !this.skipPersistedZeroRestore &&
       this.state.paused &&
       this.state.t === 0 &&
       persistedState.t !== 0 &&
@@ -232,6 +234,10 @@ class App extends Component {
     ) {
       this.syncTimerStateToQuery();
       this.syncTimerStateToStorage();
+    }
+
+    if (this.skipPersistedZeroRestore && this.state.t === 0) {
+      this.skipPersistedZeroRestore = false;
     }
 
     const wasAutoHidingFullscreenUi = shouldAutoHideFullscreenUi(prevState);
@@ -391,6 +397,10 @@ class App extends Component {
     this.revealFullscreenUi();
   };
 
+  handleSurfacePointerDown = () => {
+    this.revealFullscreenUi();
+  };
+
   toggleFullScreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -402,6 +412,7 @@ class App extends Component {
   };
 
   resetTimer = () => {
+    this.skipPersistedZeroRestore = true;
     this.setState({
       t: 0,
       paused: true,
@@ -475,6 +486,7 @@ class App extends Component {
       return;
     }
 
+    this.skipPersistedZeroRestore = nextTime === 0;
     this.setState({
       t: nextTime,
       paused: true,
@@ -522,6 +534,7 @@ class App extends Component {
       default:
         break;
     }
+    this.skipPersistedZeroRestore = state.t === 0;
     this.setState(state);
   }
 
@@ -534,6 +547,10 @@ class App extends Component {
         event.preventDefault();
         this.closeTimeInput();
       }
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
 
@@ -603,6 +620,7 @@ class App extends Component {
     } = this.state;
     const persistedState = getInitialTimerState();
     const effectiveState = (
+      !this.skipPersistedZeroRestore &&
       paused &&
       t === 0 &&
       persistedState.t !== 0 &&
@@ -615,10 +633,21 @@ class App extends Component {
     const hideFullscreenUi = shouldAutoHideFullscreenUi(this.state) && !cursorVisible;
     const showTips = !hideFullscreenUi;
     return (
-      <div className={clsx('App', { 'hide-cursor': hideFullscreenUi })}>
-        {hideFullscreenUi && <div className="cursor-hide-overlay" aria-hidden="true" />}
+      <div
+        className={clsx('App', { 'hide-cursor': hideFullscreenUi })}
+        onPointerDown={this.handleSurfacePointerDown}
+      >
+        {hideFullscreenUi && (
+          <button
+            type="button"
+            className="cursor-hide-overlay"
+            aria-label="Show controls"
+            onClick={this.revealFullscreenUi}
+          />
+        )}
         <div
           className={clsx('clock', { negative: isNegative, paused, 'show-cursor': showCursor })}
+          onClick={this.revealFullscreenUi}
           onDoubleClick={() => this.toggleFullScreen()}
         >
           {isNegative && <span className="sign">-</span>}
@@ -659,7 +688,28 @@ class App extends Component {
             {timeInputError && <span className="time-input-error">{timeInputError}</span>}
           </form>
         )}
-        <ul className={clsx('tips', { hidden: !showTips })}>
+        <div className={clsx('mobile-controls', { hidden: !showTips })}>
+          <button type="button" aria-label={paused ? 'Start timer' : 'Pause timer'} onClick={this.pauseTimer}>
+            {paused ? 'Start' : 'Pause'}
+          </button>
+          <button type="button" aria-label="Set time" onClick={this.openTimeInput}>Set</button>
+          <button
+            type="button"
+            aria-label={mode === 'countdown' ? 'Switch to stopwatch' : 'Switch to countdown'}
+            onClick={() => this.switchMode()}
+          >
+            {mode === 'countdown' ? 'Countdown' : 'Stopwatch'}
+          </button>
+          <button type="button" aria-label="Reset timer" onClick={this.resetTimer}>Reset</button>
+          <button
+            type="button"
+            aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            onClick={this.toggleFullScreen}
+          >
+            {fullscreen ? 'Exit Full' : 'Full'}
+          </button>
+        </div>
+        <ul className={clsx('tips', 'desktop-tips', { hidden: !showTips })}>
           <li>
             <button onClick={this.toggleFullScreen}>F</button>
             -
@@ -684,7 +734,7 @@ class App extends Component {
             <span className="tip">reset timer</span>
           </li>
           <li>
-            <button onClick={this.switchMode}>S</button>
+            <button onClick={() => this.switchMode()}>S</button>
             -
             {mode === 'countdown' ?
               <span className="tip"><span>countdown ✓</span> or <button onClick={() => this.switchMode('stopwatch')}>stopwatch</button></span>

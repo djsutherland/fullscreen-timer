@@ -3,6 +3,8 @@
 }
 
 .cursor-hide-overlay {
+  border: 0;
+  background: transparent;
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -131,6 +133,7 @@ body {
   background: rgba(10, 10, 10, 0.94);
   color: #d9d9d9;
   font-family: "SFMono-Regular", "Roboto Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  z-index: 40;
 }
 .time-input-label {
   font-size: 13px;
@@ -161,6 +164,39 @@ body {
 .time-input-error {
   font-size: 12px;
   color: #d77a7a;
+}
+
+.mobile-controls {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  width: min(680px, calc(100vw - 24px));
+  padding: 10px;
+  border: 1px solid rgba(90, 90, 90, 0.45);
+  border-radius: 18px;
+  background: rgba(12, 12, 12, 0.95);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.mobile-controls.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(10px);
+}
+.mobile-controls button {
+  min-height: 52px;
+  border: 1px solid #424242;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1c1c1c 0%, #111 100%);
+  color: #e0e0e0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .tips {
@@ -201,11 +237,41 @@ body {
   padding: 0;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 700px), (pointer: coarse), (any-pointer: coarse) {
+  .mobile-controls {
+    display: grid;
+  }
+
+  .desktop-tips {
+    display: none;
+  }
+
   .time-input-panel {
-    bottom: 144px;
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
+    transform: none;
+    width: auto;
     flex-wrap: wrap;
     justify-content: center;
-    max-width: calc(100vw - 32px);
+    gap: 12px;
+  }
+
+  .time-input-label,
+  .time-input-error {
+    width: 100%;
+    text-align: left;
+  }
+
+  .time-input {
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+    font-size: 20px;
+  }
+
+  .time-input-panel button {
+    min-height: 48px;
+    padding: 10px 14px;
   }
 }
