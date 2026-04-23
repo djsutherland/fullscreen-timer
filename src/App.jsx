@@ -15,6 +15,7 @@ const formatClockTime = (totalSeconds) => {
     text: `${formatHour(hour)}:${pad(minute)}:${pad(second)}`,
   };
 };
+const formatQueryTime = (totalSeconds) => formatClockTime(totalSeconds).text.replaceAll(':', '.');
 const getRunningDisplayStep = (totalSeconds) => {
   if (totalSeconds >= 3600) return 15;
   if (totalSeconds >= 1200) return 5;
@@ -38,7 +39,7 @@ const getDisplayTotalSeconds = (t, paused, mode) => {
     : Math.floor(wholeSeconds / step) * step;
 };
 const parseTimeInput = (value) => {
-  const segments = value.trim().split(':');
+  const segments = value.trim().split(/[:.]/);
   if (!segments[0] || segments.length > 3 || segments.some((segment) => !/^\d+$/.test(segment))) {
     return null;
   }
@@ -218,7 +219,7 @@ class App extends Component {
 
   syncTimerStateToQuery = () => {
     const params = new URLSearchParams(window.location.search);
-    const queryValue = formatClockTime(parseInt(this.state.t, 10)).text;
+    const queryValue = formatQueryTime(parseInt(this.state.t, 10));
 
     params.delete('countdown');
     params.delete('stopwatch');

@@ -23,13 +23,13 @@ it('renders time as hours, minutes, and seconds', () => {
   expect(container.querySelector('.clock')?.textContent).toBe('00:00');
   expect(container.querySelector('.seconds-group')).not.toBeNull();
   expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(true);
-  expect(new URLSearchParams(window.location.search).get('stopwatch')).toBe('0:00:00');
+  expect(new URLSearchParams(window.location.search).get('stopwatch')).toBe('0.00.00');
 
   unmount();
 });
 
 it('restores timer state from the query string on load', () => {
-  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.56.31`);
 
   const { container, getByText, unmount } = render(<App />);
 
@@ -39,6 +39,17 @@ it('restores timer state from the query string on load', () => {
     t: 3391,
     mode: 'countdown',
   });
+
+  unmount();
+});
+
+it('restores timer state from legacy colon query strings on load', () => {
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+
+  const { container, getByText, unmount } = render(<App />);
+
+  expect(container.querySelector('.clock')?.textContent).toBe('56:31');
+  expect(getByText('countdown ✓')).not.toBeNull();
 
   unmount();
 });
@@ -100,7 +111,7 @@ it('restores timer state from local storage when session storage is missing', ()
 it('restores persisted timer state on pageshow and starts from that value', () => {
   const { container, getByText, unmount } = render(<App />);
 
-  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:08:09`);
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.08.09`);
   window.sessionStorage.setItem('fullscreen-timer-state', JSON.stringify({
     t: 489,
     mode: 'countdown',
@@ -155,14 +166,14 @@ it('lets the user type a time directly', () => {
 
   expect(container.querySelector('.clock')?.textContent).toBe('1:23:45');
   expect(getByText('countdown ✓')).not.toBeNull();
-  expect(new URLSearchParams(window.location.search).get('countdown')).toBe('1:23:45');
+  expect(new URLSearchParams(window.location.search).get('countdown')).toBe('1.23.45');
   expect(new URLSearchParams(window.location.search).get('stopwatch')).toBeNull();
 
   unmount();
 });
 
 it('quantizes stopwatch seconds while running at one hour or more', () => {
-  window.history.replaceState(null, '', `${window.location.pathname}?stopwatch=1:02:16`);
+  window.history.replaceState(null, '', `${window.location.pathname}?stopwatch=1.02.16`);
 
   const { container, getByText, unmount } = render(<App />);
 
@@ -174,7 +185,7 @@ it('quantizes stopwatch seconds while running at one hour or more', () => {
 });
 
 it('quantizes countdown seconds while running between twenty minutes and one hour', () => {
-  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.56.31`);
 
   const { container, getByText, unmount } = render(<App />);
 
@@ -187,7 +198,7 @@ it('quantizes countdown seconds while running between twenty minutes and one hou
 
 it('shows the exact countdown second again when paused', async () => {
   vi.useFakeTimers();
-  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0:56:31`);
+  window.history.replaceState(null, '', `${window.location.pathname}?countdown=0.56.31`);
 
   const { container, getByText, unmount } = render(<App />);
 
