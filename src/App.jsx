@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import './App.css';
 
 const pad = (n) => (n < 10) ? `0${n}` : n;
+const formatHour = (n) => (n < 10) ? `${n}` : pad(n);
 
 class App extends Component {
   constructor(props) {
@@ -13,7 +14,7 @@ class App extends Component {
       mode: 'stopwatch',
       fullscreen: false,
       adjusting: false,
-      editing: null, // minute, second, null
+      editing: null, // hour, minute, second, null
       showCursor: false,
     };
     this.timer = null;
@@ -123,6 +124,7 @@ class App extends Component {
 
   handleCursorMove(direction) {
     const state = { ...this.state };
+    const editPositions = ['hour', 'minute', 'second'];
     state.paused = true;
     this.releaseWakeLock();
     switch (direction) {
@@ -131,16 +133,28 @@ class App extends Component {
         if (!state.editing) {
           state.editing = 'second';
         }
-        state.t += (direction === 'up' ? 1 : -1) * (state.editing === 'second' ? 1 : 60);
+        state.t += (direction === 'up' ? 1 : -1) * (
+          state.editing === 'second' ? 1 : state.editing === 'minute' ? 60 : 3600
+        );
         if (state.t < 0) {
           state.t = 0;
         }
         break;
       case 'left':
-        state.editing = 'minute';
+        if (!state.editing) {
+          state.editing = 'minute';
+        } else {
+          const currentIndex = editPositions.indexOf(state.editing);
+          state.editing = editPositions[Math.max(0, currentIndex - 1)];
+        }
         break;
       case 'right':
-        state.editing = 'second';
+        if (!state.editing) {
+          state.editing = 'second';
+        } else {
+          const currentIndex = editPositions.indexOf(state.editing);
+          state.editing = editPositions[Math.min(editPositions.length - 1, currentIndex + 1)];
+        }
         break;
       default:
         break;
@@ -181,17 +195,23 @@ class App extends Component {
 
   render() {
     const { t, paused, editing, mode, showCursor, fullscreen } = this.state;
-    const second = parseInt(t % 60);
-    const minute = parseInt((t - second) / 60);
+    const totalSeconds = parseInt(t, 10);
+    const hour = parseInt(totalSeconds / 3600, 10);
+    const minute = parseInt((totalSeconds % 3600) / 60, 10);
+    const second = totalSeconds % 60;
     return (
       <div className="App">
         <div
           className={clsx('clock', { 'show-cursor': showCursor })}
           onDoubleClick={() => this.toggleFullScreen()}
         >
+          <span className={clsx('time hour', { editing: editing === 'hour' })}>{formatHour(hour)}</span>
+          <span className="separator">:</span>
           <span className={clsx('time minute', { editing: editing === 'minute' })}>{pad(minute)}</span>
-          :
-          <span className={clsx('time second', { editing: editing === 'second' })}>{pad(second)}</span>
+          <span className="seconds-group">
+            <span className="separator">:</span>
+            <span className={clsx('time second', { editing: editing === 'second' })}>{pad(second)}</span>
+          </span>
         </div>
         <ul className="tips">
           <li>

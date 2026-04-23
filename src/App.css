@@ -41,14 +41,33 @@ body {
 }
 
 .clock {
+  --clock-size: min(21vw, 52vh);
   position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-size: 30vw;
+  display: flex;
+  align-items: flex-end;
+  width: max-content;
+  white-space: nowrap;
+  font-size: var(--clock-size);
+  line-height: 0.88;
   color: white;
   font-family: "SFMono-Regular", "Roboto Mono", Consolas, "Liberation Mono", Menlo, monospace;
   font-variant-numeric: tabular-nums;
+}
+.clock .separator {
+  line-height: 1;
+}
+.clock .seconds-group {
+  display: flex;
+  align-items: flex-end;
+  font-size: 0.3em;
+  color: #787878;
+  padding-bottom: 0.1em;
+}
+.clock .seconds-group .time {
+  color: inherit;
 }
 .clock.show-cursor .time.editing {
   background: #666;
