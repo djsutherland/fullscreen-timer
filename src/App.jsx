@@ -66,11 +66,13 @@ class App extends Component {
       this.tick();
     }, 500);
     window.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange);
   }
 
   componentWillUnmount() {
     clearInterval(this.timer);
     window.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
     this.releaseWakeLock();
   }
 
@@ -83,9 +85,11 @@ class App extends Component {
 
   async requestWakeLock() {
     try {
+      if (this.wakeLock) return;
       if ('wakeLock' in navigator) {
         this.wakeLock = await navigator.wakeLock.request('screen');
         this.wakeLock.addEventListener('release', () => {
+          this.wakeLock = null;
           console.log('Wake Lock was released');
         });
         console.log('Wake Lock is active');
@@ -111,7 +115,6 @@ class App extends Component {
     this.setState((prevState) => {
       const t = prevState.t + (mode === 'countdown' ? -1 : 1) * 0.5;
       if (t <= 0) {
-        this.releaseWakeLock();
         return {
           t: 0,
           paused: true,
@@ -122,20 +125,28 @@ class App extends Component {
     });
   }
 
+  handleFullscreenChange = () => {
+    const fullscreen = Boolean(document.fullscreenElement);
+    this.setState({ fullscreen });
+
+    if (fullscreen) {
+      this.requestWakeLock();
+    } else {
+      this.releaseWakeLock();
+    }
+  };
+
   toggleFullScreen = () => {
-    const { fullscreen } = this.state;
-    if (!fullscreen) {
+    if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
       }
     }
-    this.setState({ fullscreen: !fullscreen });
   };
 
   resetTimer = () => {
-    this.releaseWakeLock();
     this.setState({
       t: 0,
       paused: true,
@@ -156,12 +167,6 @@ class App extends Component {
     this.setState({
       paused,
       editing: false,
-    }, () => {
-      if (!paused) {
-        this.requestWakeLock();
-      } else {
-        this.releaseWakeLock();
-      }
     });
   };
 
@@ -174,7 +179,6 @@ class App extends Component {
   };
 
   openTimeInput = () => {
-    this.releaseWakeLock();
     this.setState((prevState) => ({
       paused: true,
       editing: null,
@@ -222,7 +226,6 @@ class App extends Component {
     const editPositions = ['hour', 'minute', 'second'];
     if (state.showTimeInput) return;
     state.paused = true;
-    this.releaseWakeLock();
     switch (direction) {
       case 'up':
       case 'down':

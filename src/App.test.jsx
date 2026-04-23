@@ -1,6 +1,6 @@
 import React from 'react';
-import { createEvent, fireEvent, render } from '@testing-library/react';
-import { expect, it } from 'vitest';
+import { createEvent, fireEvent, render, waitFor } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 import App from './App';
 
 it('renders without crashing', () => {
@@ -58,6 +58,76 @@ it('does not type the shortcut key into the time prompt', () => {
   expect(getByLabelText('Time input').value).toBe('0:00:00');
 
   unmount();
+});
+
+it('keeps a wake lock active while fullscreen is on', async () => {
+  const release = vi.fn().mockResolvedValue(undefined);
+  const request = vi.fn().mockResolvedValue({
+    release,
+    addEventListener: vi.fn(),
+  });
+  const originalWakeLock = navigator.wakeLock;
+  const originalRequestFullscreen = document.documentElement.requestFullscreen;
+  const originalExitFullscreen = document.exitFullscreen;
+  const originalFullscreenElement = document.fullscreenElement;
+
+  Object.defineProperty(navigator, 'wakeLock', {
+    configurable: true,
+    value: { request },
+  });
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: vi.fn(() => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: document.documentElement,
+      });
+      fireEvent(document, new Event('fullscreenchange'));
+      return Promise.resolve();
+    }),
+  });
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    value: vi.fn(() => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: null,
+      });
+      fireEvent(document, new Event('fullscreenchange'));
+      return Promise.resolve();
+    }),
+  });
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    value: null,
+  });
+
+  const { getByText, unmount } = render(<App />);
+
+  fireEvent.click(getByText('F'));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('screen'));
+
+  fireEvent.click(getByText('F'));
+  await waitFor(() => expect(release).toHaveBeenCalled());
+
+  unmount();
+
+  Object.defineProperty(navigator, 'wakeLock', {
+    configurable: true,
+    value: originalWakeLock,
+  });
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: originalRequestFullscreen,
+  });
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    value: originalExitFullscreen,
+  });
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    value: originalFullscreenElement,
+  });
 });
 
 it('shows a validation error for invalid typed times', () => {
