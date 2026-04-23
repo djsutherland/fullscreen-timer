@@ -1,5 +1,5 @@
 import React from 'react';
-import { createEvent, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import App from './App';
 
@@ -128,6 +128,84 @@ it('keeps a wake lock active while fullscreen is on', async () => {
     configurable: true,
     value: originalFullscreenElement,
   });
+});
+
+it('hides the cursor after inactivity in fullscreen mode', async () => {
+  vi.useFakeTimers();
+
+  const originalWakeLock = navigator.wakeLock;
+  const originalRequestFullscreen = document.documentElement.requestFullscreen;
+  const originalExitFullscreen = document.exitFullscreen;
+  const originalFullscreenElement = document.fullscreenElement;
+
+  Object.defineProperty(navigator, 'wakeLock', {
+    configurable: true,
+    value: {
+      request: vi.fn().mockResolvedValue({
+        release: vi.fn().mockResolvedValue(undefined),
+        addEventListener: vi.fn(),
+      }),
+    },
+  });
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: vi.fn(() => {
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: document.documentElement,
+      });
+      fireEvent(document, new Event('fullscreenchange'));
+      return Promise.resolve();
+    }),
+  });
+  Object.defineProperty(document, 'exitFullscreen', {
+    configurable: true,
+    value: vi.fn(() => Promise.resolve()),
+  });
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    value: null,
+  });
+
+  const { getByText, unmount } = render(<App />);
+
+  try {
+    fireEvent.click(getByText('F'));
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
+
+    fireEvent.pointerMove(window);
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(document.documentElement.classList.contains('hide-cursor')).toBe(true);
+  } finally {
+    unmount();
+
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: originalWakeLock,
+    });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: originalRequestFullscreen,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: originalExitFullscreen,
+    });
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      value: originalFullscreenElement,
+    });
+    vi.useRealTimers();
+  }
 });
 
 it('shows a validation error for invalid typed times', () => {

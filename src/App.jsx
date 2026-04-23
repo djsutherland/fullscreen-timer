@@ -40,6 +40,7 @@ const parseTimeInput = (value) => {
 
   return (hour * 3600) + (minute * 60) + second;
 };
+const CURSOR_HIDE_DELAY_MS = 1500;
 
 class App extends Component {
   constructor(props) {
@@ -52,12 +53,14 @@ class App extends Component {
       adjusting: false,
       editing: null, // hour, minute, second, null
       showCursor: false,
+      cursorVisible: true,
       showTimeInput: false,
       timeInputValue: '0:00:00',
       timeInputError: '',
     };
     this.timer = null;
     this.wakeLock = null;
+    this.cursorHideTimer = null;
     this.timeInputRef = React.createRef();
   }
 
@@ -66,13 +69,19 @@ class App extends Component {
       this.tick();
     }, 500);
     window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('mousemove', this.handlePointerActivity);
+    window.addEventListener('pointermove', this.handlePointerActivity);
     document.addEventListener('fullscreenchange', this.handleFullscreenChange);
   }
 
   componentWillUnmount() {
     clearInterval(this.timer);
+    clearTimeout(this.cursorHideTimer);
     window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('mousemove', this.handlePointerActivity);
+    window.removeEventListener('pointermove', this.handlePointerActivity);
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.documentElement.classList.remove('hide-cursor');
     this.releaseWakeLock();
   }
 
@@ -81,6 +90,11 @@ class App extends Component {
       this.timeInputRef.current.focus();
       this.timeInputRef.current.select();
     }
+
+    document.documentElement.classList.toggle(
+      'hide-cursor',
+      this.state.fullscreen && !this.state.cursorVisible,
+    );
   }
 
   async requestWakeLock() {
@@ -106,6 +120,21 @@ class App extends Component {
     }
   }
 
+  clearCursorHideTimer = () => {
+    if (this.cursorHideTimer) {
+      clearTimeout(this.cursorHideTimer);
+      this.cursorHideTimer = null;
+    }
+  };
+
+  scheduleCursorHide = () => {
+    this.clearCursorHideTimer();
+    this.cursorHideTimer = setTimeout(() => {
+      this.setState({ cursorVisible: false });
+      this.cursorHideTimer = null;
+    }, CURSOR_HIDE_DELAY_MS);
+  };
+
   tick() {
     const { mode, paused, showCursor, editing } = this.state;
     if (editing) {
@@ -127,13 +156,22 @@ class App extends Component {
 
   handleFullscreenChange = () => {
     const fullscreen = Boolean(document.fullscreenElement);
-    this.setState({ fullscreen });
+    this.setState({ fullscreen, cursorVisible: true });
 
     if (fullscreen) {
       this.requestWakeLock();
+      this.scheduleCursorHide();
     } else {
+      this.clearCursorHideTimer();
       this.releaseWakeLock();
     }
+  };
+
+  handlePointerActivity = () => {
+    if (!document.fullscreenElement) return;
+
+    this.setState({ cursorVisible: true });
+    this.scheduleCursorHide();
   };
 
   toggleFullScreen = () => {
