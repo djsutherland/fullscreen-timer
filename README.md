@@ -4,7 +4,7 @@ Fullscreen Timer is a simple presentation-friendly timer with stopwatch and coun
 
 ![animation](docs/animate.gif)
 
-Try the online version at [alphakevin.github.io/fullscreen-timer](https://alphakevin.github.io/fullscreen-timer/).
+Try the online version at [djsutherland.github.io/fullscreen-timer](https://djsutherland.github.io/fullscreen-timer/).
 
 ## Development
 
@@ -27,6 +27,8 @@ Run the test suite with:
 npm test
 ```
 
+Deployment runs through GitHub Actions. Pushes to `main` run tests, build the app, and publish `dist/` to GitHub Pages.
+
 ## Keyboard Shortcut
 
 - <kbd>F</kbd> toggles fullscreen mode.
@@ -34,6 +36,7 @@ npm test
 - <kbd>Enter</kbd> toggles the active edit position.
 - <kbd>R</kbd> resets the timer.
 - <kbd>S</kbd> switches between countdown and stopwatch mode.
+- <kbd>T</kbd> opens direct time entry.
 - <kbd>Space</kbd> starts or pauses the timer.
 
 ## Licence
