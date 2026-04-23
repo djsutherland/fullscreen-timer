@@ -4,6 +4,42 @@ import './App.css';
 
 const pad = (n) => (n < 10) ? `0${n}` : n;
 const formatHour = (n) => (n < 10) ? `${n}` : pad(n);
+const formatClockTime = (totalSeconds) => {
+  const hour = parseInt(totalSeconds / 3600, 10);
+  const minute = parseInt((totalSeconds % 3600) / 60, 10);
+  const second = totalSeconds % 60;
+  return {
+    hour,
+    minute,
+    second,
+    text: `${formatHour(hour)}:${pad(minute)}:${pad(second)}`,
+  };
+};
+const parseTimeInput = (value) => {
+  const segments = value.trim().split(':');
+  if (!segments[0] || segments.length > 3 || segments.some((segment) => !/^\d+$/.test(segment))) {
+    return null;
+  }
+
+  const parts = segments.map((segment) => parseInt(segment, 10));
+  let hour = 0;
+  let minute = 0;
+  let second = 0;
+
+  if (parts.length === 3) {
+    [hour, minute, second] = parts;
+  } else if (parts.length === 2) {
+    [minute, second] = parts;
+  } else {
+    [second] = parts;
+  }
+
+  if (minute >= 60 || second >= 60) {
+    return null;
+  }
+
+  return (hour * 3600) + (minute * 60) + second;
+};
 
 class App extends Component {
   constructor(props) {
@@ -16,9 +52,13 @@ class App extends Component {
       adjusting: false,
       editing: null, // hour, minute, second, null
       showCursor: false,
+      showTimeInput: false,
+      timeInputValue: '0:00:00',
+      timeInputError: '',
     };
     this.timer = null;
     this.wakeLock = null;
+    this.timeInputRef = React.createRef();
   }
 
   componentDidMount() {
@@ -32,6 +72,13 @@ class App extends Component {
     clearInterval(this.timer);
     window.removeEventListener('keydown', this.handleKeyDown);
     this.releaseWakeLock();
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (!prevState.showTimeInput && this.state.showTimeInput && this.timeInputRef.current) {
+      this.timeInputRef.current.focus();
+      this.timeInputRef.current.select();
+    }
   }
 
   async requestWakeLock() {
@@ -91,7 +138,10 @@ class App extends Component {
     this.releaseWakeLock();
     this.setState({
       t: 0,
-      paused: true
+      paused: true,
+      showTimeInput: false,
+      timeInputValue: '0:00:00',
+      timeInputError: '',
     });
   };
 
@@ -116,15 +166,61 @@ class App extends Component {
   };
 
   toggleEditing = () => {
-    const { editing } = this.state;
+    const { editing, showTimeInput } = this.state;
+    if (showTimeInput) return;
     this.setState({
       editing: editing ? null : 'second',
+    });
+  };
+
+  openTimeInput = () => {
+    this.releaseWakeLock();
+    this.setState((prevState) => ({
+      paused: true,
+      editing: null,
+      showTimeInput: true,
+      timeInputValue: formatClockTime(parseInt(prevState.t, 10)).text,
+      timeInputError: '',
+    }));
+  };
+
+  closeTimeInput = () => {
+    this.setState({
+      showTimeInput: false,
+      timeInputError: '',
+    });
+  };
+
+  handleTimeInputChange = (event) => {
+    this.setState({
+      timeInputValue: event.target.value,
+      timeInputError: '',
+    });
+  };
+
+  submitTimeInput = () => {
+    const nextTime = parseTimeInput(this.state.timeInputValue);
+
+    if (nextTime === null) {
+      this.setState({
+        timeInputError: 'Use h:mm:ss, m:ss, or ss',
+      });
+      return;
+    }
+
+    this.setState({
+      t: nextTime,
+      paused: true,
+      showTimeInput: false,
+      timeInputValue: formatClockTime(nextTime).text,
+      timeInputError: '',
     });
   };
 
   handleCursorMove(direction) {
     const state = { ...this.state };
     const editPositions = ['hour', 'minute', 'second'];
+    if (state.showTimeInput) return;
     state.paused = true;
     this.releaseWakeLock();
     switch (direction) {
@@ -163,29 +259,59 @@ class App extends Component {
   }
 
   handleKeyDown = (event) => {
+    const targetTag = event.target.tagName;
+    if (targetTag === 'INPUT') {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeTimeInput();
+      }
+      return;
+    }
+
     switch (event.key) {
       case 'F':
       case 'f':
+        event.preventDefault();
         this.toggleFullScreen();
         break;
       case 'R':
       case 'r':
+        event.preventDefault();
         this.resetTimer();
         break;
       case 'S':
       case 's':
+        event.preventDefault();
         this.switchMode();
         break;
       case 'ArrowUp':
       case 'ArrowDown':
       case 'ArrowLeft':
       case 'ArrowRight':
+        event.preventDefault();
         this.handleCursorMove(event.key.toLowerCase().replace('arrow', ''));
         break;
       case 'Enter':
-        this.toggleEditing();
+        event.preventDefault();
+        if (this.state.showTimeInput) {
+          this.submitTimeInput();
+        } else {
+          this.toggleEditing();
+        }
+        break;
+      case 'T':
+      case 't':
+        event.preventDefault();
+        this.openTimeInput();
+        break;
+      case 'Escape':
+        if (this.state.showTimeInput) {
+          event.preventDefault();
+          this.closeTimeInput();
+        }
         break;
       case ' ':
+        event.preventDefault();
         this.pauseTimer();
         break;
       default:
@@ -194,11 +320,19 @@ class App extends Component {
   };
 
   render() {
-    const { t, paused, editing, mode, showCursor, fullscreen } = this.state;
+    const {
+      t,
+      paused,
+      editing,
+      mode,
+      showCursor,
+      fullscreen,
+      showTimeInput,
+      timeInputValue,
+      timeInputError,
+    } = this.state;
     const totalSeconds = parseInt(t, 10);
-    const hour = parseInt(totalSeconds / 3600, 10);
-    const minute = parseInt((totalSeconds % 3600) / 60, 10);
-    const second = totalSeconds % 60;
+    const { hour, minute, second } = formatClockTime(totalSeconds);
     return (
       <div className="App">
         <div
@@ -213,6 +347,31 @@ class App extends Component {
             <span className={clsx('time second', { editing: editing === 'second' })}>{pad(second)}</span>
           </span>
         </div>
+        {showTimeInput && (
+          <form
+            className="time-input-panel"
+            onSubmit={(event) => {
+              event.preventDefault();
+              this.submitTimeInput();
+            }}
+          >
+            <label className="time-input-label" htmlFor="time-input">Set time</label>
+            <input
+              ref={this.timeInputRef}
+              id="time-input"
+              className={clsx('time-input', { invalid: timeInputError })}
+              type="text"
+              inputMode="numeric"
+              placeholder="h:mm:ss"
+              value={timeInputValue}
+              onChange={this.handleTimeInputChange}
+              aria-label="Time input"
+            />
+            <button type="submit">Set</button>
+            <button type="button" onClick={this.closeTimeInput}>Cancel</button>
+            {timeInputError && <span className="time-input-error">{timeInputError}</span>}
+          </form>
+        )}
         <ul className="tips">
           <li>
             <button onClick={this.toggleFullScreen}>F</button>
@@ -226,6 +385,11 @@ class App extends Component {
             <button onClick={() => this.handleCursorMove('down')}>↓</button>
             -
             <span className="tip">edit timer</span>
+          </li>
+          <li>
+            <button onClick={this.openTimeInput}>T</button>
+            -
+            <span className="tip">type a time directly</span>
           </li>
           <li>
             <button onClick={this.resetTimer}>R</button>
