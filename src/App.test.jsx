@@ -16,7 +16,7 @@ it('renders without crashing', () => {
 it('renders time as hours, minutes, and seconds', () => {
   const { container, unmount } = render(<App />);
 
-  expect(container.querySelector('.clock')?.textContent).toBe('0:00:00');
+  expect(container.querySelector('.clock')?.textContent).toBe('00:00');
   expect(container.querySelector('.seconds-group')).not.toBeNull();
   expect(container.querySelector('.clock')?.classList.contains('paused')).toBe(true);
   expect(new URLSearchParams(window.location.search).get('stopwatch')).toBe('0:00:00');
@@ -29,7 +29,7 @@ it('restores timer state from the query string on load', () => {
 
   const { container, getByText, unmount } = render(<App />);
 
-  expect(container.querySelector('.clock')?.textContent).toBe('0:56:31');
+  expect(container.querySelector('.clock')?.textContent).toBe('56:31');
   expect(getByText('countdown ✓')).not.toBeNull();
 
   unmount();
@@ -97,7 +97,7 @@ it('quantizes countdown seconds while running between twenty minutes and one hou
 
   fireEvent.click(getByText('Space'));
 
-  expect(container.querySelector('.clock')?.textContent).toBe('0:56:35');
+  expect(container.querySelector('.clock')?.textContent).toBe('56:35');
 
   unmount();
 });
@@ -110,14 +110,14 @@ it('shows the exact countdown second again when paused', async () => {
 
   try {
     fireEvent.click(getByText('Space'));
-    expect(container.querySelector('.clock')?.textContent).toBe('0:56:35');
+    expect(container.querySelector('.clock')?.textContent).toBe('56:35');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     fireEvent.click(getByText('Space'));
 
-    expect(container.querySelector('.clock')?.textContent).toBe('0:56:31');
+    expect(container.querySelector('.clock')?.textContent).toBe('56:31');
   } finally {
     unmount();
     vi.useRealTimers();
@@ -292,13 +292,13 @@ it('shows a validation error for invalid typed times', () => {
   fireEvent.click(getByText('Set'));
 
   expect(getByText('Use h:mm:ss, m:ss, or ss')).not.toBeNull();
-  expect(container.querySelector('.clock')?.textContent).toBe('0:00:00');
+  expect(container.querySelector('.clock')?.textContent).toBe('00:00');
 
   fireEvent.change(getByLabelText('Time input'), { target: { value: '45' } });
   fireEvent.click(getByText('Set'));
 
   expect(queryByText('Use h:mm:ss, m:ss, or ss')).toBeNull();
-  expect(container.querySelector('.clock')?.textContent).toBe('0:00:45');
+  expect(container.querySelector('.clock')?.textContent).toBe('00:45');
 
   unmount();
 });

@@ -440,14 +440,19 @@ class App extends Component {
     } = this.state;
     const displaySeconds = getDisplayTotalSeconds(t, paused, mode);
     const { hour, minute, second } = formatClockTime(displaySeconds);
+    const showHours = hour > 0;
     return (
       <div className="App">
         <div
           className={clsx('clock', { paused, 'show-cursor': showCursor })}
           onDoubleClick={() => this.toggleFullScreen()}
         >
-          <span className={clsx('time hour', { editing: editing === 'hour' })}>{formatHour(hour)}</span>
-          <span className="separator">:</span>
+          {showHours && (
+            <>
+              <span className={clsx('time hour', { editing: editing === 'hour' })}>{formatHour(hour)}</span>
+              <span className="separator">:</span>
+            </>
+          )}
           <span className={clsx('time minute', { editing: editing === 'minute' })}>{pad(minute)}</span>
           <span className="seconds-group">
             <span className="separator">:</span>
